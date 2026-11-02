@@ -4,6 +4,35 @@ from fastapi.testclient import TestClient
 from main import create_app
 
 
+@pytest.mark.parametrize(
+    "product",
+    [
+        {"name": 42},
+        {"name": False},
+        {"name": []},
+        {"name": {}},
+    ],
+)
+def test_rejects_wrong_product_name_type(product: dict[str, object]) -> None:
+    with TestClient(create_app()) as client:
+        response = client.post("/products", json=product)
+    assert response.status_code == 422
+    assert "name" in response.json()["detail"].lower()
+
+
+@pytest.mark.parametrize(
+    "product", [{}, {"name": ""}, {"name": " \n\t"}, {"name": None}]
+)
+def test_accepts_incomplete_product_data(product: dict[str, object]) -> None:
+    with TestClient(create_app()) as client:
+        response = client.post("/products", json=product)
+    assert response.status_code == 200
+    assert response.json() == {
+        "product": product,
+        "missing_fields": ["name", "manufacturer", "specs", "description"],
+    }
+
+
 def test_receives_product_json_without_changing_technical_values():
     product = {
         "name": "Манометр показывающий DM 02",
@@ -21,7 +50,23 @@ def test_receives_product_json_without_changing_technical_values():
         response = client.post("/products", json=product)
 
     assert response.status_code == 200
-    assert response.json() == product
+    assert response.json() == {"product": product, "missing_fields": []}
+
+
+def test_reports_missing_facts_and_preserves_supplied_fields() -> None:
+    product = {
+        "name": "DM 02",
+        "specs": {"range": "0-1,6 МПа", "power": None},
+        "custom_note": "Keep this source text",
+    }
+    with TestClient(create_app()) as client:
+        response = client.post("/products", json=product)
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "product": product,
+        "missing_fields": ["manufacturer", "specs.power", "description"],
+    }
 
 
 def test_rejects_malformed_json():

@@ -4,6 +4,8 @@ from typing import Never
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import JSONResponse
 
+from application.validate_product import validate_product
+
 router = APIRouter()
 
 
@@ -47,6 +49,9 @@ async def receive_product(request: Request) -> JSONResponse:
         )
         if not isinstance(product, dict):
             raise ValueError("JSON must be an object.")
-        return JSONResponse(content=product)
+        parsed = validate_product(product)
+        return JSONResponse(
+            content={"product": product, "missing_fields": parsed.missing_fields()}
+        )
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from None
