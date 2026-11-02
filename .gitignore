@@ -1,0 +1,15 @@
+.venv/
+__pycache__/
+AGENTS.md
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.cache/
+.coverage
+coverage.xml
+htmlcov/
+.DS_Store
+.env
+.env.*
+!.env.example
