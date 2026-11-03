@@ -99,7 +99,7 @@ class OpenAIJsonClient:
                 max_output_tokens=4000,
                 store=False,
             )
-        except APIError as exc:
+        except (APIError, json.JSONDecodeError, UnicodeDecodeError) as exc:
             raise LLMError("The LLM request failed.") from exc
 
     async def close(self) -> None:

@@ -232,6 +232,32 @@ def test_wraps_malformed_provider_responses(body: object) -> None:
     assert "test-key" not in str(caught.value)
 
 
+@pytest.mark.parametrize(
+    "body",
+    [
+        pytest.param(b"{broken test-key", id="invalid-json"),
+        pytest.param(b"\xff test-key", id="invalid-utf8"),
+    ],
+)
+def test_wraps_provider_json_body_decoding_errors(body: bytes) -> None:
+    def handler(request: httpx2.Request) -> httpx2.Response:
+        return httpx2.Response(
+            200,
+            content=body,
+            headers={"content-type": "application/json"},
+            request=request,
+        )
+
+    async def run() -> None:
+        async with _sdk(handler) as sdk:
+            await OpenAIJsonClient(sdk, model="test-model").generate(
+                {}, instructions=INSTRUCTIONS, schema=SCHEMA
+            )
+
+    with pytest.raises(LLMError, match=r"^The LLM request failed\.$"):
+        asyncio.run(run())
+
+
 def test_close_closes_the_injected_sdk_http_client() -> None:
     async def run() -> None:
         http_client = httpx2.AsyncClient(
