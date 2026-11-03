@@ -258,6 +258,55 @@ def test_wraps_provider_json_body_decoding_errors(body: bytes) -> None:
         asyncio.run(run())
 
 
+@pytest.mark.parametrize("source", ["provider-envelope", "model-text"])
+def test_wraps_json_nesting_that_exceeds_parser_capacity(source: str) -> None:
+    nested_json = "[" * 10000 + "0" + "]" * 10000
+    if source == "provider-envelope":
+        body = nested_json.encode()
+    else:
+        body = json.dumps(_response('{"value":' + nested_json + "}")).encode()
+
+    def handler(request: httpx2.Request) -> httpx2.Response:
+        return httpx2.Response(
+            200,
+            content=body,
+            headers={"content-type": "application/json"},
+            request=request,
+        )
+
+    async def run() -> None:
+        async with _sdk(handler) as sdk:
+            await OpenAIJsonClient(sdk, model="test-model").generate(
+                {}, instructions=INSTRUCTIONS, schema=SCHEMA
+            )
+
+    with pytest.raises(LLMError):
+        asyncio.run(run())
+
+
+def test_rejects_input_nesting_before_a_model_request() -> None:
+    data: dict[str, object] = {}
+    for _ in range(10000):
+        data = {"nested": data}
+    request_count = 0
+
+    def handler(request: httpx2.Request) -> httpx2.Response:
+        nonlocal request_count
+        request_count += 1
+        return httpx2.Response(200, json=_response(), request=request)
+
+    async def run() -> None:
+        async with _sdk(handler) as sdk:
+            await OpenAIJsonClient(sdk, model="test-model").generate(
+                data, instructions=INSTRUCTIONS, schema=SCHEMA
+            )
+
+    with pytest.raises(LLMError, match=r"^Input must contain supported JSON values\.$"):
+        asyncio.run(run())
+
+    assert request_count == 0
+
+
 def test_close_closes_the_injected_sdk_http_client() -> None:
     async def run() -> None:
         http_client = httpx2.AsyncClient(

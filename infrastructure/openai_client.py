@@ -63,7 +63,7 @@ class OpenAIJsonClient:
             if not isinstance(result, dict):
                 raise ValueError("Expected an object.")
             json.dumps(result, ensure_ascii=False, allow_nan=False).encode("utf-8")
-        except (AttributeError, TypeError, ValueError) as exc:
+        except (AttributeError, TypeError, ValueError, RecursionError) as exc:
             raise LLMError("The LLM response is not a valid JSON object.") from exc
         return result
 
@@ -72,7 +72,7 @@ class OpenAIJsonClient:
         try:
             payload = json.dumps(dict(data), ensure_ascii=False, allow_nan=False)
             payload.encode("utf-8")
-        except (TypeError, ValueError) as exc:
+        except (TypeError, ValueError, RecursionError) as exc:
             raise LLMError("Input must contain supported JSON values.") from exc
         return payload
 
@@ -99,7 +99,12 @@ class OpenAIJsonClient:
                 max_output_tokens=4000,
                 store=False,
             )
-        except (APIError, json.JSONDecodeError, UnicodeDecodeError) as exc:
+        except (
+            APIError,
+            json.JSONDecodeError,
+            UnicodeDecodeError,
+            RecursionError,
+        ) as exc:
             raise LLMError("The LLM request failed.") from exc
 
     async def close(self) -> None:
