@@ -177,3 +177,13 @@ make model requests.
 - Direct dependency versions are pinned, but there is no full transitive lockfile.
 - This is a local prototype. Authentication, persistence, CMS integration, and
   automatic publishing are outside its current scope.
+
+## Possible improvements
+
+1. Obtain the second confirmed product input and capture live outputs for both
+   required examples. Record the input, model, and prompt revision with each
+   result. The current WIKA family input remains a separately sourced demo.
+2. Evaluate the factuality reviewer against human-reviewed drafts. Count missed
+   unsupported claims and false alarms before changing prompts or models.
+3. Add a complete dependency lock so local and CI installs use the same resolved
+   package versions.
