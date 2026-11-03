@@ -4,6 +4,25 @@ from fastapi.testclient import TestClient
 from main import create_app
 
 
+class StubLLM:
+    async def generate(self, data, *, instructions, schema):
+        return {
+            "seo_title": "Черновик",
+            "seo_description": "Описание прибора. " * 55,
+            "search_queries": ["прибор", "измерения", "оборудование"],
+            "commercial_block": "Для задач измерения.",
+            "clarifications": [],
+        }
+
+    async def close(self) -> None:
+        pass
+
+
+@pytest.fixture(autouse=True)
+def configured_llm(monkeypatch):
+    monkeypatch.setattr("main.OpenAIJsonClient.from_env", lambda: StubLLM())
+
+
 @pytest.mark.parametrize(
     "product",
     [
@@ -27,10 +46,14 @@ def test_accepts_incomplete_product_data(product: dict[str, object]) -> None:
     with TestClient(create_app()) as client:
         response = client.post("/products", json=product)
     assert response.status_code == 200
-    assert response.json() == {
-        "product": product,
-        "missing_fields": ["name", "manufacturer", "specs", "description"],
-    }
+    assert response.json()["product"] == product
+    assert response.json()["missing_fields"] == [
+        "name",
+        "manufacturer",
+        "specs",
+        "description",
+    ]
+    assert "draft" in response.json()
 
 
 def test_receives_product_json_without_changing_technical_values():
@@ -50,7 +73,11 @@ def test_receives_product_json_without_changing_technical_values():
         response = client.post("/products", json=product)
 
     assert response.status_code == 200
-    assert response.json() == {"product": product, "missing_fields": []}
+    assert response.json()["product"] == product
+    assert response.json()["missing_fields"] == []
+    assert response.json()["draft"]["key_characteristics"] == [
+        {"name": key, "value": value} for key, value in product["specs"].items()
+    ]
 
 
 def test_reports_missing_facts_and_preserves_supplied_fields() -> None:
@@ -63,10 +90,16 @@ def test_reports_missing_facts_and_preserves_supplied_fields() -> None:
         response = client.post("/products", json=product)
 
     assert response.status_code == 200
-    assert response.json() == {
-        "product": product,
-        "missing_fields": ["manufacturer", "specs.power", "description"],
-    }
+    assert response.json()["product"] == product
+    assert response.json()["missing_fields"] == [
+        "manufacturer",
+        "specs.power",
+        "description",
+    ]
+    assert response.json()["draft"]["key_characteristics"] == [
+        {"name": "range", "value": "0-1,6 МПа"},
+        {"name": "power", "value": "данных нет"},
+    ]
 
 
 def test_rejects_malformed_json():

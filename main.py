@@ -1,11 +1,39 @@
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
+from pathlib import Path
+
 import uvicorn
+from dotenv import load_dotenv
 from fastapi import FastAPI
 
+from application.llm import JsonLLMClient, LLMError
+from infrastructure.openai_client import OpenAIJsonClient
 from presentation.http import router
 
 
-def create_app() -> FastAPI:
-    app = FastAPI(title="Soyuz Pribor")
+@asynccontextmanager
+async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
+    if app.state.llm is not None:
+        yield
+        return
+    load_dotenv(Path(__file__).with_name(".env"))
+    try:
+        client = OpenAIJsonClient.from_env()
+    except LLMError:
+        yield
+        return
+    app.state.llm = client
+    try:
+        yield
+    finally:
+        await client.close()
+        app.state.llm = None
+
+
+def create_app(llm: JsonLLMClient | None = None) -> FastAPI:
+    """Wire the app; injected clients remain owned by their caller."""
+    app = FastAPI(title="Soyuz Pribor", lifespan=_lifespan)
+    app.state.llm = llm
     app.include_router(router)
     return app
 

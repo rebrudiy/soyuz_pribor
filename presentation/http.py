@@ -4,7 +4,8 @@ from typing import Never
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import JSONResponse
 
-from application.validate_product import validate_product
+from application.generate_product import generate_product
+from application.llm import LLMError, LLMNotConfigured
 
 router = APIRouter()
 
@@ -32,6 +33,23 @@ def _reject_constant(value: str) -> Never:
     },
 )
 async def receive_product(request: Request) -> JSONResponse:
+    try:
+        product = await _read_json_object(request)
+        result = await generate_product(product, client=request.app.state.llm)
+        return JSONResponse(content=result)
+    except LLMNotConfigured:
+        raise HTTPException(
+            status_code=503, detail="Set OPENAI_API_KEY and OPENAI_MODEL in .env."
+        ) from None
+    except LLMError:
+        raise HTTPException(
+            status_code=502, detail="Product generation failed."
+        ) from None
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from None
+
+
+async def _read_json_object(request: Request) -> dict[str, object]:
     content_type = (
         request.headers.get("content-type", "").partition(";")[0].strip().lower()
     )
@@ -43,15 +61,10 @@ async def receive_product(request: Request) -> JSONResponse:
         )
 
     body = await request.body()
-    try:
-        product = json.loads(
-            body, object_pairs_hook=_unique_fields, parse_constant=_reject_constant
-        )
-        if not isinstance(product, dict):
-            raise ValueError("JSON must be an object.")
-        parsed = validate_product(product)
-        return JSONResponse(
-            content={"product": product, "missing_fields": parsed.missing_fields()}
-        )
-    except ValueError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from None
+    product = json.loads(
+        body, object_pairs_hook=_unique_fields, parse_constant=_reject_constant
+    )
+    if not isinstance(product, dict):
+        raise ValueError("JSON must be an object.")
+    json.dumps(product, ensure_ascii=False, allow_nan=False).encode("utf-8")
+    return product
