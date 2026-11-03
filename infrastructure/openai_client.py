@@ -3,6 +3,7 @@ import os
 from collections.abc import Mapping
 
 from openai import APIError, AsyncOpenAI
+from openai.types.responses import Response
 
 from application.llm import LLMError
 
@@ -40,31 +41,14 @@ class OpenAIJsonClient:
         schema: Mapping[str, object],
     ) -> dict[str, object]:
         """Send supplied facts unchanged, including incomplete or empty data."""
-        try:
-            payload = json.dumps(dict(data), ensure_ascii=False, allow_nan=False)
-            payload.encode("utf-8")
-        except (TypeError, ValueError) as exc:
-            raise LLMError("Input must contain supported JSON values.") from exc
+        payload = self._encode_input(data)
+        response = await self._request(
+            payload, instructions=instructions, schema=schema
+        )
+        return self._decode_response(response)
 
-        try:
-            response = await self._sdk.responses.create(
-                model=self._model,
-                instructions=instructions,
-                input=payload,
-                text={
-                    "format": {
-                        "type": "json_schema",
-                        "name": "result",
-                        "strict": True,
-                        "schema": dict(schema),
-                    }
-                },
-                max_output_tokens=4000,
-                store=False,
-            )
-        except APIError as exc:
-            raise LLMError("The LLM request failed.") from exc
-
+    @staticmethod
+    def _decode_response(response: Response) -> dict[str, object]:
         if response.status != "completed":
             raise LLMError("The LLM response did not complete.")
         if any(
@@ -82,6 +66,41 @@ class OpenAIJsonClient:
         except (TypeError, ValueError) as exc:
             raise LLMError("The LLM response is not a valid JSON object.") from exc
         return result
+
+    @staticmethod
+    def _encode_input(data: Mapping[str, object]) -> str:
+        try:
+            payload = json.dumps(dict(data), ensure_ascii=False, allow_nan=False)
+            payload.encode("utf-8")
+        except (TypeError, ValueError) as exc:
+            raise LLMError("Input must contain supported JSON values.") from exc
+        return payload
+
+    async def _request(
+        self,
+        payload: str,
+        *,
+        instructions: str,
+        schema: Mapping[str, object],
+    ) -> Response:
+        try:
+            return await self._sdk.responses.create(
+                model=self._model,
+                instructions=instructions,
+                input=payload,
+                text={
+                    "format": {
+                        "type": "json_schema",
+                        "name": "result",
+                        "strict": True,
+                        "schema": dict(schema),
+                    }
+                },
+                max_output_tokens=4000,
+                store=False,
+            )
+        except APIError as exc:
+            raise LLMError("The LLM request failed.") from exc
 
     async def close(self) -> None:
         """Release the SDK's HTTP connections."""
