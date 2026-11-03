@@ -114,6 +114,10 @@ rewriting. Neither status proves that the source or generated text is true.
 | `502` | Generation or review failed, was refused, or returned unusable output. |
 | `503` | API key or model configuration is missing. |
 
+Provider request errors log the exception type and HTTP status in the terminal.
+This application log line omits keys, provider messages, tracebacks, and product
+data. The HTTP response remains generic.
+
 ## Design and review guide
 
 Start with the use case, then follow the boundaries:

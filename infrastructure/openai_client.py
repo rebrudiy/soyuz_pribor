@@ -1,11 +1,14 @@
 import json
+import logging
 import os
 from collections.abc import Mapping
 
-from openai import APIError, AsyncOpenAI
+from openai import APIError, APIStatusError, AsyncOpenAI
 from openai.types.responses import Response
 
 from application.llm import LLMError
+
+logger = logging.getLogger(__name__)
 
 
 def _unique_object(pairs: list[tuple[str, object]]) -> dict[str, object]:
@@ -105,6 +108,10 @@ class OpenAIJsonClient:
             UnicodeDecodeError,
             RecursionError,
         ) as exc:
+            status = exc.status_code if isinstance(exc, APIStatusError) else None
+            logger.warning(
+                "LLM request failed: %s (HTTP status: %s).", type(exc).__name__, status
+            )
             raise LLMError("The LLM request failed.") from exc
 
     async def close(self) -> None:

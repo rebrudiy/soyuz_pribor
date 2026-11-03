@@ -85,7 +85,9 @@ def test_sends_supplied_json_and_returns_a_completed_object(
 
 
 @pytest.mark.parametrize("status", [401, 429, 500])
-def test_wraps_api_errors_without_exposing_provider_text(status: int) -> None:
+def test_wraps_api_errors_without_exposing_provider_text(
+    status: int, caplog: pytest.LogCaptureFixture
+) -> None:
     def handler(request: httpx2.Request) -> httpx2.Response:
         return httpx2.Response(
             status,
@@ -103,6 +105,16 @@ def test_wraps_api_errors_without_exposing_provider_text(status: int) -> None:
         asyncio.run(run())
 
     assert "test-key" not in str(caught.value)
+    records = [
+        record
+        for record in caplog.records
+        if record.name == "infrastructure.openai_client"
+    ]
+    assert len(records) == 1
+    assert str(status) in records[0].getMessage()
+    assert records[0].exc_info is None
+    assert "test-key" not in caplog.text
+    assert "Provider error" not in caplog.text
 
 
 def test_wraps_sdk_timeout() -> None:
