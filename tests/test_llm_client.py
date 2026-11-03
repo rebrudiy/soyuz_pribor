@@ -119,3 +119,84 @@ def test_wraps_sdk_timeout() -> None:
         asyncio.run(run())
 
     assert "test-key" not in str(caught.value)
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        pytest.param(float("nan"), id="nonfinite-input"),
+        pytest.param({"not JSON"}, id="unserializable-input"),
+    ],
+)
+def test_invalid_input_is_rejected_before_a_model_request(value: object) -> None:
+    request_count = 0
+
+    def handler(request: httpx2.Request) -> httpx2.Response:
+        nonlocal request_count
+        request_count += 1
+        return httpx2.Response(200, json=_response(), request=request)
+
+    async def run() -> None:
+        async with _sdk(handler) as sdk:
+            await OpenAIJsonClient(sdk, model="test-model").generate(
+                {"value": value}, instructions=INSTRUCTIONS, schema=SCHEMA
+            )
+
+    with pytest.raises(LLMError):
+        asyncio.run(run())
+
+    assert request_count == 0
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        pytest.param(
+            _response() | {"status": "incomplete"}, id="incomplete-with-valid-text"
+        ),
+        pytest.param(_response() | {"status": "failed"}, id="failed-with-valid-text"),
+        pytest.param(
+            _response()
+            | {
+                "output": [
+                    {
+                        "id": "msg_refusal",
+                        "type": "message",
+                        "status": "completed",
+                        "role": "assistant",
+                        "content": [
+                            {"type": "refusal", "refusal": "Refusal with test-key"},
+                            {
+                                "type": "output_text",
+                                "text": '{"seo_title":"Draft"}',
+                                "annotations": [],
+                            },
+                        ],
+                    }
+                ]
+            },
+            id="refusal-with-valid-text",
+        ),
+        pytest.param(_response("not JSON"), id="invalid-json"),
+        pytest.param(_response("[]"), id="non-object-json"),
+        pytest.param(_response('{"value":NaN}'), id="nonfinite-json"),
+        pytest.param(
+            _response('{"specs":{"range":"0-1 MPa","range":"0-2 MPa"}}'),
+            id="duplicate-specification",
+        ),
+    ],
+)
+def test_rejects_unsuccessful_or_invalid_model_output(body: dict[str, object]) -> None:
+    def handler(request: httpx2.Request) -> httpx2.Response:
+        return httpx2.Response(200, json=body, request=request)
+
+    async def run() -> None:
+        async with _sdk(handler) as sdk:
+            await OpenAIJsonClient(sdk, model="test-model").generate(
+                {}, instructions=INSTRUCTIONS, schema=SCHEMA
+            )
+
+    with pytest.raises(LLMError) as caught:
+        asyncio.run(run())
+
+    assert "test-key" not in str(caught.value)

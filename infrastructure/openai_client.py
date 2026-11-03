@@ -6,6 +6,13 @@ from openai import APIError, AsyncOpenAI
 from application.llm import LLMError
 
 
+def _unique_object(pairs: list[tuple[str, object]]) -> dict[str, object]:
+    result = dict(pairs)
+    if len(result) != len(pairs):
+        raise ValueError("The model returned repeated JSON fields.")
+    return result
+
+
 class OpenAIJsonClient:
     """OpenAI transport adapter; prompts and output schemas belong to the caller."""
 
@@ -21,7 +28,11 @@ class OpenAIJsonClient:
         schema: Mapping[str, object],
     ) -> dict[str, object]:
         """Send supplied facts unchanged, including incomplete or empty data."""
-        payload = json.dumps(dict(data), ensure_ascii=False)
+        try:
+            payload = json.dumps(dict(data), ensure_ascii=False, allow_nan=False)
+            payload.encode("utf-8")
+        except (TypeError, ValueError) as exc:
+            raise LLMError("Input must contain supported JSON values.") from exc
 
         try:
             response = await self._sdk.responses.create(
@@ -42,4 +53,20 @@ class OpenAIJsonClient:
         except APIError as exc:
             raise LLMError("The LLM request failed.") from exc
 
-        return json.loads(response.output_text)
+        if response.status != "completed":
+            raise LLMError("The LLM response did not complete.")
+        if any(
+            part.type == "refusal"
+            for item in response.output
+            if item.type == "message"
+            for part in item.content
+        ):
+            raise LLMError("The LLM refused the request.")
+        try:
+            result = json.loads(response.output_text, object_pairs_hook=_unique_object)
+            if not isinstance(result, dict):
+                raise ValueError("Expected an object.")
+            json.dumps(result, ensure_ascii=False, allow_nan=False).encode("utf-8")
+        except (TypeError, ValueError) as exc:
+            raise LLMError("The LLM response is not a valid JSON object.") from exc
+        return result
