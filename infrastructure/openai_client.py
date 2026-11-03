@@ -49,21 +49,21 @@ class OpenAIJsonClient:
 
     @staticmethod
     def _decode_response(response: Response) -> dict[str, object]:
-        if response.status != "completed":
-            raise LLMError("The LLM response did not complete.")
-        if any(
-            part.type == "refusal"
-            for item in response.output
-            if item.type == "message"
-            for part in item.content
-        ):
-            raise LLMError("The LLM refused the request.")
         try:
+            if response.status != "completed":
+                raise LLMError("The LLM response did not complete.")
+            if any(
+                part.type == "refusal"
+                for item in response.output
+                if item.type == "message"
+                for part in item.content
+            ):
+                raise LLMError("The LLM refused the request.")
             result = json.loads(response.output_text, object_pairs_hook=_unique_object)
             if not isinstance(result, dict):
                 raise ValueError("Expected an object.")
             json.dumps(result, ensure_ascii=False, allow_nan=False).encode("utf-8")
-        except (TypeError, ValueError) as exc:
+        except (AttributeError, TypeError, ValueError) as exc:
             raise LLMError("The LLM response is not a valid JSON object.") from exc
         return result
 

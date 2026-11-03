@@ -202,6 +202,36 @@ def test_rejects_unsuccessful_or_invalid_model_output(body: dict[str, object]) -
     assert "test-key" not in str(caught.value)
 
 
+@pytest.mark.parametrize(
+    "body",
+    [
+        pytest.param({"status": "completed"}, id="missing-output"),
+        pytest.param(_response() | {"output": None}, id="null-output"),
+        pytest.param(
+            _response() | {"output": [{"type": "message", "content": None}]},
+            id="null-message-content",
+        ),
+        pytest.param("Provider error containing test-key", id="non-json-body"),
+    ],
+)
+def test_wraps_malformed_provider_responses(body: object) -> None:
+    def handler(request: httpx2.Request) -> httpx2.Response:
+        if isinstance(body, str):
+            return httpx2.Response(200, text=body, request=request)
+        return httpx2.Response(200, json=body, request=request)
+
+    async def run() -> None:
+        async with _sdk(handler) as sdk:
+            await OpenAIJsonClient(sdk, model="test-model").generate(
+                {}, instructions=INSTRUCTIONS, schema=SCHEMA
+            )
+
+    with pytest.raises(LLMError) as caught:
+        asyncio.run(run())
+
+    assert "test-key" not in str(caught.value)
+
+
 def test_close_closes_the_injected_sdk_http_client() -> None:
     async def run() -> None:
         http_client = httpx2.AsyncClient(
