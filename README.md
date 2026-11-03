@@ -23,7 +23,8 @@ Dependencies have one definition in `pyproject.toml`: `app` contains runtime
 packages; `dev` includes `app`, pytest, Ruff, and the HTTP test client. Use
 `--group app` if you only want to run the service.
 
-Copy the configuration template, then put your API key in `.env`:
+Create a key in the [OpenAI API dashboard](https://platform.openai.com/api-keys),
+then copy the configuration template and put the key in `.env`:
 
 ```bash
 cp -n .env.example .env
