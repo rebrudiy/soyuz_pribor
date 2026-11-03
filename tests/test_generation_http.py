@@ -1,5 +1,6 @@
 from collections.abc import Mapping
 
+import pytest
 from fastapi.testclient import TestClient
 
 from application.llm import LLMError
@@ -65,6 +66,34 @@ def test_http_translates_model_failure_without_leaking_details() -> None:
 
     assert response.status_code == 502
     assert "private provider details" not in response.text
+
+
+@pytest.mark.parametrize("stage", ["generation", "review"])
+def test_internal_value_error_is_not_exposed_as_a_client_input_error(
+    stage: str,
+) -> None:
+    class BrokenClient(StubLLM):
+        async def generate(
+            self,
+            data: Mapping[str, object],
+            *,
+            instructions: str,
+            schema: Mapping[str, object],
+        ) -> dict[str, object]:
+            is_review = "issues" in schema["properties"]
+            if is_review == (stage == "review"):
+                raise ValueError("private-provider-canary")
+            return await super().generate(
+                data, instructions=instructions, schema=schema
+            )
+
+    with TestClient(
+        create_app(llm=BrokenClient()), raise_server_exceptions=False
+    ) as client:
+        response = client.post("/products", json={})
+
+    assert response.status_code == 500
+    assert "private-provider-canary" not in response.text
 
 
 def test_http_reports_flagged_claims_without_rejecting_missing_input() -> None:

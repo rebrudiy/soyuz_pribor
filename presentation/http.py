@@ -7,6 +7,7 @@ from fastapi.responses import JSONResponse
 
 from application.generate_product import generate_product
 from application.llm import LLMError, LLMNotConfigured
+from domain.product import InvalidProduct
 
 router = APIRouter()
 
@@ -59,7 +60,7 @@ async def receive_product(request: Request) -> JSONResponse:
         raise HTTPException(
             status_code=502, detail="Product generation failed."
         ) from None
-    except ValueError as exc:
+    except InvalidProduct as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from None
 
 
@@ -86,5 +87,9 @@ async def _read_json_object(request: Request) -> dict[str, object]:
             raise ValueError("JSON must be an object.")
         json.dumps(product, ensure_ascii=False, allow_nan=False).encode("utf-8")
     except RecursionError:
-        raise ValueError("JSON nesting is too deep.") from None
+        raise HTTPException(
+            status_code=422, detail="JSON nesting is too deep."
+        ) from None
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from None
     return product
