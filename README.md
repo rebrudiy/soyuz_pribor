@@ -90,7 +90,7 @@ Ordinary decimals, zero, and false are accepted without coercing them to strings
 | `product` | Original input JSON. |
 | `draft` | SEO title, SEO description, search queries, commercial block, clarifications, and copied technical characteristics. |
 | `missing_fields` | Absent, null, or blank facts; zero and false remain valid values. |
-| `warnings` | SEO length or search-query count outside the requested limits. |
+| `warnings` | Blank text or query entries, SEO length violations, or a search-query count outside the target. |
 | `factuality` | Review status and flagged claims, with the field, exact claim, and reason. |
 
 Targets are a title of at most 70 characters, a description of 800–1200

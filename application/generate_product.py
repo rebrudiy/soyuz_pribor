@@ -57,7 +57,13 @@ def _characteristics(product: Product) -> list[dict[str, object]]:
 
 
 def _quality_warnings(draft: dict[str, object]) -> list[str]:
-    warnings = []
+    warnings = [
+        f"{field} is blank."
+        for field in ("seo_title", "seo_description", "commercial_block")
+        if not draft[field].strip()
+    ]
+    if any(not query.strip() for query in draft["search_queries"]):
+        warnings.append("Search queries contain blank entries.")
     if len(draft["seo_title"]) > 70:
         warnings.append("SEO title exceeds 70 characters.")
     if not 800 <= len(draft["seo_description"]) <= 1200:

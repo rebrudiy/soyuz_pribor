@@ -181,6 +181,29 @@ def test_failed_review_does_not_return_an_unchecked_success() -> None:
 
 
 @pytest.mark.parametrize(
+    ("changes", "expected_warning"),
+    [
+        ({"seo_title": " \t"}, "seo_title is blank."),
+        ({"seo_description": " " * 800}, "seo_description is blank."),
+        ({"commercial_block": "\n"}, "commercial_block is blank."),
+        (
+            {"search_queries": ["one", " ", "three"]},
+            "Search queries contain blank entries.",
+        ),
+    ],
+)
+def test_blank_content_is_reported_without_rejecting_the_draft(
+    changes: dict[str, object], expected_warning: str
+) -> None:
+    draft = _draft() | changes
+
+    result = asyncio.run(generate_product({}, client=FakeClient(draft)))
+
+    assert result["warnings"] == [expected_warning]
+    assert result["draft"] == draft | {"key_characteristics": []}
+
+
+@pytest.mark.parametrize(
     "draft",
     [
         pytest.param(
