@@ -200,3 +200,47 @@ def test_rejects_unsuccessful_or_invalid_model_output(body: dict[str, object]) -
         asyncio.run(run())
 
     assert "test-key" not in str(caught.value)
+
+
+def test_close_closes_the_injected_sdk_http_client() -> None:
+    async def run() -> None:
+        http_client = httpx2.AsyncClient(
+            transport=httpx2.MockTransport(lambda request: httpx2.Response(500))
+        )
+        sdk = AsyncOpenAI(api_key="test-key", http_client=http_client, max_retries=0)
+        try:
+            await OpenAIJsonClient(sdk, model="test-model").close()
+            assert http_client.is_closed
+        finally:
+            await sdk.close()
+
+    asyncio.run(run())
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("OPENAI_API_KEY", None),
+        ("OPENAI_MODEL", None),
+        ("OPENAI_MODEL", " \t"),
+    ],
+)
+def test_from_env_reports_missing_configuration_safely(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    field: str,
+    value: str | None,
+) -> None:
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    monkeypatch.setenv("OPENAI_MODEL", "test-model")
+    if value is None:
+        monkeypatch.delenv(field)
+    else:
+        monkeypatch.setenv(field, value)
+
+    with pytest.raises(LLMError) as caught:
+        OpenAIJsonClient.from_env()
+
+    captured = capsys.readouterr()
+    assert "test-key" not in str(caught.value)
+    assert "test-key" not in captured.out + captured.err

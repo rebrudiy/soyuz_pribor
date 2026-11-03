@@ -1,4 +1,5 @@
 import json
+import os
 from collections.abc import Mapping
 
 from openai import APIError, AsyncOpenAI
@@ -17,8 +18,19 @@ class OpenAIJsonClient:
     """OpenAI transport adapter; prompts and output schemas belong to the caller."""
 
     def __init__(self, sdk: AsyncOpenAI, *, model: str) -> None:
+        if not model.strip():
+            raise LLMError("A model name is required.")
         self._sdk = sdk
         self._model = model
+
+    @classmethod
+    def from_env(cls) -> "OpenAIJsonClient":
+        """Create a client from environment variables; close it after use."""
+        key = os.environ.get("OPENAI_API_KEY", "").strip()
+        model = os.environ.get("OPENAI_MODEL", "").strip()
+        if not key or not model:
+            raise LLMError("Set OPENAI_API_KEY and OPENAI_MODEL.")
+        return cls(AsyncOpenAI(api_key=key, timeout=30.0, max_retries=1), model=model)
 
     async def generate(
         self,
@@ -70,3 +82,7 @@ class OpenAIJsonClient:
         except (TypeError, ValueError) as exc:
             raise LLMError("The LLM response is not a valid JSON object.") from exc
         return result
+
+    async def close(self) -> None:
+        """Release the SDK's HTTP connections."""
+        await self._sdk.close()
