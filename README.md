@@ -24,7 +24,7 @@ packages; `dev` includes `app`, pytest, Ruff, and the HTTP test client. Use
 `--group app` if you only want to run the service.
 
 Create a key in the [OpenAI API dashboard](https://platform.openai.com/api-keys),
-then copy the configuration template and put the key in `.env`:
+then copy the configuration template and set `OPENAI_API_KEY` in `.env`:
 
 ```bash
 cp -n .env.example .env
@@ -33,6 +33,8 @@ cp -n .env.example .env
 The template selects `gpt-5.4-mini`. You can change `OPENAI_MODEL` in `.env`.
 `.env` is ignored by Git. Keep the key local. If you already have `.env`, edit
 that file instead of replacing it.
+Existing environment variables take precedence over `.env`. Restart the app
+after changing configuration.
 
 ```bash
 .venv/bin/python main.py
