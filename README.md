@@ -14,7 +14,7 @@ Generated text still needs human review.
 Requires Python 3.12+ and an OpenAI API key. Run these commands from the repo root:
 
 ```bash
-python3 -m venv .venv
+python3.12 -m venv .venv
 .venv/bin/python -m pip install --upgrade "pip>=25.1"
 .venv/bin/python -m pip install --group dev
 ```
@@ -23,14 +23,15 @@ Dependencies have one definition in `pyproject.toml`: `app` contains runtime
 packages; `dev` includes `app`, pytest, Ruff, and the HTTP test client. Use
 `--group app` if you only want to run the service.
 
-Create a local `.env` file:
+Copy the configuration template, then put your API key in `.env`:
 
-```dotenv
-OPENAI_API_KEY=your-api-key
-OPENAI_MODEL=gpt-5.4-mini
+```bash
+cp -n .env.example .env
 ```
 
-`.env` is ignored by Git. Keep the key local.
+The template selects `gpt-5.4-mini`. You can change `OPENAI_MODEL` in `.env`.
+`.env` is ignored by Git. Keep the key local. If you already have `.env`, edit
+that file instead of replacing it.
 
 ```bash
 .venv/bin/python main.py
