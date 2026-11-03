@@ -57,12 +57,15 @@ recorded live model result.
 - [Assignment sample](examples/assignment-sample.json): copied from the example
   JSON in the take-home PDF, including its abbreviated description. This is
   assignment data, not an independently verified manufacturer specification.
-- [WIKA 213.53 family](examples/wika-21353-family.json): selected for this demo
-  from the [manufacturer's product page](https://www.wika.com/en-en/213_53.WIKA)
-  and [datasheet PM 02.12](https://www.wika.com/media/Data-sheets/Pressure/Pressure-gauges/ds_pm0212_en_co.pdf),
-  checked on 2026-11-03. This is family-level data, not an employer-provided
-  second product or a selected order configuration. The listed sizes are options;
-  no range, accuracy, connection variant, or filling fluid has been selected.
+- [WIKA 213.53.100, article 9022597](examples/wika-9022597.json): selected from
+  the [official 2025–2026 catalogue, page 40](https://www.wika.com/media/Others/IT-IT/std_catalogue_2025_2026_en_co.pdf#page=40).
+  The article row and page headers specify range, size, connection, and materials.
+  Accuracy and reference temperature come
+  from [datasheet PM 02.12, page 3](https://www.wika.com/media/Data-sheets/Pressure/Pressure-gauges/ds_pm0212_en_co.pdf#page=3);
+  applications come from page 1. Checked on 2026-11-03. This is an independently
+  selected catalogue article, not the employer's supplied second product.
+  Filling-fluid type and connection location are left unknown in this input.
+  Prices, stock, delivery promises, and optional approvals are not assumed.
 
 Send either file to the running service:
 
@@ -180,9 +183,9 @@ make model requests.
 
 ## Possible improvements
 
-1. Obtain the second confirmed product input and capture live outputs for both
+1. Obtain the employer's second product input and capture live outputs for both
    required examples. Record the input, model, and prompt revision with each
-   result. The current WIKA family input remains a separately sourced demo.
+   result. The current WIKA catalogue article remains a separately sourced demo.
 2. Evaluate the factuality reviewer against human-reviewed drafts. Count missed
    unsupported claims and false alarms before changing prompts or models.
 3. Add a complete dependency lock so local and CI installs use the same resolved
