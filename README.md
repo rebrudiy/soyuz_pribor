@@ -110,7 +110,7 @@ rewriting. Neither status proves that the source or generated text is true.
 | --- | --- |
 | `200` | Draft and factuality review returned, including incomplete or flagged drafts. |
 | `415` | Unsupported content type. Use `application/json`. |
-| `422` | Invalid JSON, a non-object body, wrong product field types, or unsupported numeric precision. |
+| `422` | Invalid JSON, excessive nesting, a non-object body, wrong product field types, or unsupported numeric precision. |
 | `502` | Generation or review failed, was refused, or returned unusable output. |
 | `503` | API key or model configuration is missing. |
 

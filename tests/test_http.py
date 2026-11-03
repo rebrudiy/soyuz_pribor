@@ -258,3 +258,17 @@ def test_preserves_supported_numbers_and_quoted_exact_values() -> None:
     assert result["product"]["specs"]["disabled"] is False
     assert result["product"]["specs"]["zero"] == 0
     assert len(llm.inputs) == 2
+
+
+def test_rejects_excessive_json_nesting_before_a_model_call() -> None:
+    llm = StubLLM()
+    body = '{"specs":{"nested":' + "[" * 10000 + "0" + "]" * 10000 + "}}"
+
+    with TestClient(create_app(llm=llm)) as client:
+        response = client.post(
+            "/products", content=body, headers={"Content-Type": "application/json"}
+        )
+
+    assert response.status_code == 422
+    assert response.json()["detail"] == "JSON nesting is too deep."
+    assert llm.inputs == []

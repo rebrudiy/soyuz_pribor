@@ -75,13 +75,16 @@ async def _read_json_object(request: Request) -> dict[str, object]:
         )
 
     body = await request.body()
-    product = json.loads(
-        body,
-        object_pairs_hook=_unique_fields,
-        parse_constant=_reject_constant,
-        parse_float=_parse_float,
-    )
-    if not isinstance(product, dict):
-        raise ValueError("JSON must be an object.")
-    json.dumps(product, ensure_ascii=False, allow_nan=False).encode("utf-8")
+    try:
+        product = json.loads(
+            body,
+            object_pairs_hook=_unique_fields,
+            parse_constant=_reject_constant,
+            parse_float=_parse_float,
+        )
+        if not isinstance(product, dict):
+            raise ValueError("JSON must be an object.")
+        json.dumps(product, ensure_ascii=False, allow_nan=False).encode("utf-8")
+    except RecursionError:
+        raise ValueError("JSON nesting is too deep.") from None
     return product
