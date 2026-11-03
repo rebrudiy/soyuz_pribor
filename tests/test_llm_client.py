@@ -6,6 +6,7 @@ import httpx2
 import pytest
 from openai import AsyncOpenAI
 
+from application.llm import LLMError
 from infrastructure.openai_client import OpenAIJsonClient
 
 SCHEMA = {
@@ -81,3 +82,40 @@ def test_sends_supplied_json_and_returns_a_completed_object(
     assert sent["text"]["format"]["type"] == "json_schema"
     assert sent["text"]["format"]["strict"] is True
     assert sent["text"]["format"]["schema"] == SCHEMA
+
+
+@pytest.mark.parametrize("status", [401, 429, 500])
+def test_wraps_api_errors_without_exposing_provider_text(status: int) -> None:
+    def handler(request: httpx2.Request) -> httpx2.Response:
+        return httpx2.Response(
+            status,
+            json={"error": {"message": "Provider error containing test-key"}},
+            request=request,
+        )
+
+    async def run() -> None:
+        async with _sdk(handler) as sdk:
+            await OpenAIJsonClient(sdk, model="test-model").generate(
+                {}, instructions=INSTRUCTIONS, schema=SCHEMA
+            )
+
+    with pytest.raises(LLMError) as caught:
+        asyncio.run(run())
+
+    assert "test-key" not in str(caught.value)
+
+
+def test_wraps_sdk_timeout() -> None:
+    def handler(request: httpx2.Request) -> httpx2.Response:
+        raise httpx2.ReadTimeout("Timeout containing test-key", request=request)
+
+    async def run() -> None:
+        async with _sdk(handler) as sdk:
+            await OpenAIJsonClient(sdk, model="test-model").generate(
+                {}, instructions=INSTRUCTIONS, schema=SCHEMA
+            )
+
+    with pytest.raises(LLMError) as caught:
+        asyncio.run(run())
+
+    assert "test-key" not in str(caught.value)

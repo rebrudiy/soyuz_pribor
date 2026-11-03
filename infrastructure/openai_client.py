@@ -1,7 +1,9 @@
 import json
 from collections.abc import Mapping
 
-from openai import AsyncOpenAI
+from openai import APIError, AsyncOpenAI
+
+from application.llm import LLMError
 
 
 class OpenAIJsonClient:
@@ -21,20 +23,23 @@ class OpenAIJsonClient:
         """Send supplied facts unchanged, including incomplete or empty data."""
         payload = json.dumps(dict(data), ensure_ascii=False)
 
-        response = await self._sdk.responses.create(
-            model=self._model,
-            instructions=instructions,
-            input=payload,
-            text={
-                "format": {
-                    "type": "json_schema",
-                    "name": "result",
-                    "strict": True,
-                    "schema": dict(schema),
-                }
-            },
-            max_output_tokens=4000,
-            store=False,
-        )
+        try:
+            response = await self._sdk.responses.create(
+                model=self._model,
+                instructions=instructions,
+                input=payload,
+                text={
+                    "format": {
+                        "type": "json_schema",
+                        "name": "result",
+                        "strict": True,
+                        "schema": dict(schema),
+                    }
+                },
+                max_output_tokens=4000,
+                store=False,
+            )
+        except APIError as exc:
+            raise LLMError("The LLM request failed.") from exc
 
         return json.loads(response.output_text)
