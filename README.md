@@ -1,73 +1,31 @@
-# Soyuz Pribor
+# Союз Прибор
 
-A local Python prototype that turns supplied product JSON into a Russian B2B
-product-card draft. It generates SEO text, search queries, a commercial brief,
-and questions about missing data. A second model request reviews the draft for
-claims that the supplied JSON does not support.
+Прототип на Python: принимает JSON с данными о приборе и создаёт черновик
+B2B-карточки на русском. Второй запрос к модели проверяет утверждения по исходному JSON.
+Технические характеристики копируются из входных данных. Пропуски не блокируют генерацию.
 
-The priority is preserving product facts. Incomplete input is accepted, and
-missing information is reported instead of becoming a required-field error.
-Generated text still needs human review.
+## Запуск
 
-## Run locally
-
-Requires Python 3.12+ and an OpenAI API key. Run these commands from the repo root:
+Нужны Python 3.12+ и [ключ OpenAI API](https://platform.openai.com/api-keys).
 
 ```bash
 python3.12 -m venv .venv
 .venv/bin/python -m pip install --upgrade "pip>=25.1"
 .venv/bin/python -m pip install --group dev
-```
-
-Dependencies have one definition in `pyproject.toml`: `app` contains runtime
-packages; `dev` includes `app`, pytest, Ruff, and the HTTP test client. Use
-`--group app` if you only want to run the service.
-
-Create a key in the [OpenAI API dashboard](https://platform.openai.com/api-keys),
-then copy the configuration template and set `OPENAI_API_KEY` in `.env`:
-
-```bash
 cp -n .env.example .env
 ```
 
-The template selects `gpt-5.4-mini`. You can change `OPENAI_MODEL` in `.env`.
-`.env` is ignored by Git. Keep the key local. If you already have `.env`, edit
-that file instead of replacing it.
-Existing environment variables take precedence over `.env`. Restart the app
-after changing configuration.
+Укажите `OPENAI_API_KEY` и `OPENAI_MODEL` в `.env`, затем запустите:
 
 ```bash
 .venv/bin/python main.py
 ```
 
-Open http://127.0.0.1:8000/docs for the interactive API, or send this partial
-product example:
+`.env` не попадает в Git. Переменные окружения имеют приоритет над ним.
+После изменения настроек нужен перезапуск. Зависимости описаны в `pyproject.toml`:
+`app` — запуск, `dev` — запуск и разработка.
 
-```bash
-curl --fail-with-body http://127.0.0.1:8000/products \
-  -H 'Content-Type: application/json' \
-  --data '{"name":"Манометр показывающий DM 02","manufacturer":"Манотомь","specs":{"диапазон измерений":"0–1,6 МПа"}}'
-```
-
-The service accepts `{}` too. This example is an input demonstration, not a
-recorded live model result.
-
-## Example inputs and sources
-
-- [Assignment sample](examples/assignment-sample.json): copied from the example
-  JSON in the take-home PDF, including its abbreviated description. This is
-  assignment data, not an independently verified manufacturer specification.
-- [WIKA 213.53.100, article 9022597](examples/wika-9022597.json): selected from
-  the [official 2025–2026 catalogue, page 40](https://www.wika.com/media/Others/IT-IT/std_catalogue_2025_2026_en_co.pdf#page=40).
-  The article row and page headers specify range, size, connection, and materials.
-  Accuracy and reference temperature come
-  from [datasheet PM 02.12, page 3](https://www.wika.com/media/Data-sheets/Pressure/Pressure-gauges/ds_pm0212_en_co.pdf#page=3);
-  applications come from page 1. Checked on 2026-11-03. This is an independently
-  selected catalogue article, not the employer's supplied second product.
-  Filling-fluid type and connection location are left unknown in this input.
-  Prices, stock, delivery promises, and optional approvals are not assumed.
-
-Send either file to the running service:
+API: http://127.0.0.1:8000/docs. Пример запроса:
 
 ```bash
 curl --fail-with-body http://127.0.0.1:8000/products \
@@ -75,80 +33,61 @@ curl --fail-with-body http://127.0.0.1:8000/products \
   --data-binary @examples/assignment-sample.json
 ```
 
-Replace the filename to try the WIKA input. Both inputs are included so the
-prototype can be tried without inventing product data. Actual generated outputs
-are pending API access and review; no fabricated outputs are supplied.
+## Вход и ответ
 
-## API behavior
+`POST /products` принимает JSON-объект, включая `{}`. Поля `name`, `manufacturer`,
+`description` — строки или `null`; `specs` — объект или `null`. Все поля необязательны.
+Дополнительные поля сохраняются. Значения, требующие высокой точности, передавайте строками.
 
-`POST /products` accepts a JSON object. Known fields are optional: `name`,
-`manufacturer`, `specs`, and `description`. Text fields accept strings or null;
-`specs` accepts an object or null. Additional input fields are preserved and
-sent to the model as source data.
-
-Send precision-sensitive technical values as quoted strings, for example
-`"0.1234567890123456789 МПа"`. If a JSON number would be rounded or overflow or
-underflow during parsing, the service returns `422` before any model request.
-Ordinary decimals, zero, and false are accepted without coercing them to strings.
-
-| Response field | Meaning |
+| Поле ответа | Содержимое |
 | --- | --- |
-| `product` | Original input JSON. |
-| `draft` | SEO title, SEO description, search queries, commercial block, clarifications, and copied technical characteristics. |
-| `missing_fields` | Absent, null, or blank facts; zero and false remain valid values. |
-| `warnings` | Blank text or queries, repeated queries, SEO length violations, or a search-query count outside the target. |
-| `factuality` | Review status and flagged claims, with the field, exact claim, and reason. |
+| `product` | Исходные данные. |
+| `draft` | SEO-заголовок и описание, поисковые запросы, коммерческий блок, уточнения и характеристики. |
+| `missing_fields` | Недостающие данные; ноль и `false` не считаются пропусками. |
+| `warnings` | Пустые тексты, повторы запросов, нарушения длины или количества. |
+| `factuality` | Статус проверки и спорные утверждения с причинами. |
 
-Targets are a title of at most 70 characters, a description of 800–1200
-characters, and 3–5 search queries. These produce warnings rather than rejection:
-sparse source data should not force the model to invent enough text to fill a quota.
+Цели: заголовок до 70 символов, описание 800–1200 символов, 3–5 запросов.
+Нарушения дают предупреждения. Неизвестные характеристики обозначаются как `данных нет`.
+`needs_review` означает наличие замечаний; `no_unsupported_claims_found` — их отсутствие.
+Черновик возвращается без автоматического исправления. Оба статуса требуют проверки человеком.
 
-Technical characteristics are copied from `specs`, rather than generated by the
-model. Null or blank specification values become `данных нет`.
+Ошибки: `415` — тип содержимого; `422` — неверный JSON, типы полей, чрезмерная
+вложенность или потеря точности чисел; `500` — внутренняя ошибка;
+`502` — сбой генерации или проверки; `503` — нет настроек API.
 
-The factuality reviewer compares all generated fields with the original JSON.
-`needs_review` means it flagged claims; `no_unsupported_claims_found` means it
-found none. Flagged drafts are returned for human review without automatic
-rewriting. Neither status proves that the source or generated text is true.
+## Структура
 
-| HTTP status | Cause |
-| --- | --- |
-| `200` | Draft and factuality review returned, including incomplete or flagged drafts. |
-| `415` | Unsupported content type. Use `application/json`. |
-| `422` | Invalid JSON, excessive nesting, a non-object body, wrong product field types, or unsupported numeric precision. |
-| `500` | Unexpected internal failure; private exception messages are not returned. |
-| `502` | Generation or review failed, was refused, or returned unusable output. |
-| `503` | API key or model configuration is missing. |
+- [domain/product.py](domain/product.py) — данные товара и пропуски.
+- [application/generate_product.py](application/generate_product.py) — сценарий генерации.
+- [application/product_prompt.py](application/product_prompt.py) — инструкции и схема ответа.
+- [application/check_factuality.py](application/check_factuality.py) — проверка утверждений.
+- [application/llm.py](application/llm.py) — протокол клиента.
+- [infrastructure/openai_client.py](infrastructure/openai_client.py) — OpenAI SDK.
+- [presentation/http.py](presentation/http.py) — HTTP; [main.py](main.py) — сборка приложения.
 
-Provider request errors log the exception type and HTTP status in the terminal.
-This application log line omits keys, provider messages, tracebacks, and product
-data. The HTTP response remains generic.
+Домен и приложение не зависят от FastAPI и OpenAI SDK — зависимости направлены внутрь.
 
-## Design and review guide
+## Примеры и ограничения
 
-Start with the use case, then follow the boundaries:
+- [Пример задания](examples/assignment-sample.json) скопирован из PDF.
+- [WIKA 9022597](examples/wika-9022597.json) выбран самостоятельно:
+  [каталог, стр. 40](https://www.wika.com/media/Others/IT-IT/std_catalogue_2025_2026_en_co.pdf#page=40),
+  [PM 02.12](https://www.wika.com/media/Data-sheets/Pressure/Pressure-gauges/ds_pm0212_en_co.pdf#page=3)
+  (применение — стр. 1, точность и температура — стр. 3). Проверено 03.11.2026.
+  Это не второй товар работодателя; неизвестные параметры оставлены пустыми.
 
-| File | Responsibility |
-| --- | --- |
-| [application/generate_product.py](application/generate_product.py) | Parse input, generate a draft, review it, and assemble the response. |
-| [application/product_prompt.py](application/product_prompt.py) | Generation instructions and structured output schema. |
-| [application/check_factuality.py](application/check_factuality.py) | Source-only review prompt and validation of reported claim spans. |
-| [domain/product.py](domain/product.py) | Product types and missing-fact reporting. |
-| [application/llm.py](application/llm.py) | JSON model client protocol and application errors. |
-| [infrastructure/openai_client.py](infrastructure/openai_client.py) | OpenAI transport, serialization, timeout, and provider errors. |
-| [presentation/http.py](presentation/http.py) | HTTP transport validation and status codes. |
-| [main.py](main.py) | Connect the adapters and manage the model client's lifetime. |
+Реальные ответы ещё не получены — нужен ключ API.
+Для сдачи также нужен второй товар работодателя.
+Тесты используют подмены и не измеряют качество модели. Проверка той же моделью
+может ошибаться и не подтверждает достоверность источника.
 
-The dependency direction follows onion architecture: domain and application code
-do not import FastAPI or the OpenAI SDK. The application uses a client protocol;
-the OpenAI adapter implements it. `main.py` supplies the concrete client.
+Успешная генерация требует двух последовательных запросов. Тайм-аут каждого —
+30 секунд, допускается одна повторная попытка SDK. Прямые зависимости закреплены,
+полной фиксации транзитивных зависимостей нет. Следующие шаги: реальные примеры,
+оценка проверки фактов человеком и полная фиксация зависимостей.
 
-Prompts treat input and draft content as untrusted data. Generation is instructed
-to preserve facts, mark unknowns, and flag source conflicts. JSON schemas constrain
-output shape; they do not establish factual correctness. The review is a separate
-request through the same configured model, not an independent factual authority.
-
-## Verification
+## Проверки
 
 ```bash
 .venv/bin/ruff check .
@@ -156,37 +95,4 @@ request through the same configured model, not an independent factual authority.
 .venv/bin/pytest
 ```
 
-Tests cover transport errors, incomplete input, value preservation, model client
-failures, draft validation, review results, and client cleanup. They use fake
-clients or mocked HTTP to check application behavior without paid API requests.
-They do not measure a model's ability to detect invented claims.
-
-The [CI workflow](.github/workflows/ci.yml) is configured to run Ruff, format
-checks, and pytest on pushes and pull requests. It does not need an API key or
-make model requests.
-
-## Tradeoffs and limits
-
-- Each successful draft uses two sequential model requests. Review adds latency
-  and cost; SDK retries can add further requests. Each request has a 30-second
-  timeout and at most one SDK retry.
-- The reviewer can miss unsupported claims or raise false alarms, especially
-  because it uses the same model as generation. Human review remains necessary.
-- Facts are checked against the supplied JSON, not an external product catalogue.
-  Incorrect source data can still produce an incorrect card.
-- Live generation and reviewer accuracy have not been evaluated. A configured
-  API key and reviewed real outputs are needed before making quality claims.
-  Two reviewed product input/output examples are still pending for the hand-in.
-- Direct dependency versions are pinned, but there is no full transitive lockfile.
-- This is a local prototype. Authentication, persistence, CMS integration, and
-  automatic publishing are outside its current scope.
-
-## Possible improvements
-
-1. Obtain the employer's second product input and capture live outputs for both
-   required examples. Record the input, model, and prompt revision with each
-   result. The current WIKA catalogue article remains a separately sourced demo.
-2. Evaluate the factuality reviewer against human-reviewed drafts. Count missed
-   unsupported claims and false alarms before changing prompts or models.
-3. Add a complete dependency lock so local and CI installs use the same resolved
-   package versions.
+[CI](.github/workflows/ci.yml) выполняет эти проверки без ключа API и обращений к модели.
