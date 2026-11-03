@@ -6,6 +6,10 @@ class LLMError(RuntimeError):
     """The model request could not produce a usable response."""
 
 
+class LLMNotConfigured(LLMError):
+    """Generation is unavailable because no model client is configured."""
+
+
 class JsonLLMClient(Protocol):
     """Application boundary for a model that accepts and returns JSON objects."""
 
