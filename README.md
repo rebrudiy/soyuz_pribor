@@ -6,23 +6,29 @@ B2B-карточки на русском. Второй запрос к моде�
 
 ## Запуск
 
-Нужны Python 3.12+ и [ключ OpenAI API](https://platform.openai.com/api-keys).
+Нужен Python 3.12+.
 
 ```bash
 python3.12 -m venv .venv
 .venv/bin/python -m pip install --upgrade "pip>=25.1"
 .venv/bin/python -m pip install --group dev
-cp -n .env.example .env
 ```
 
-Укажите `OPENAI_API_KEY` и `OPENAI_MODEL` в `.env`, затем запустите:
+Через подписку ChatGPT и установленный [Codex CLI](https://learn.chatgpt.com/docs/non-interactive-mode):
+
+```bash
+codex login
+.venv/bin/python main.py --codex
+```
+
+Или через [ключ OpenAI API](https://platform.openai.com/api-keys): скопируйте
+`.env.example` в `.env`, укажите `OPENAI_API_KEY` и `OPENAI_MODEL`, затем запустите:
 
 ```bash
 .venv/bin/python main.py
 ```
 
-`.env` не попадает в Git. Переменные окружения имеют приоритет над ним.
-После изменения настроек нужен перезапуск. Зависимости описаны в `pyproject.toml`:
+Зависимости описаны в `pyproject.toml`:
 `app` — запуск, `dev` — запуск и разработка.
 
 API: http://127.0.0.1:8000/docs. Пример запроса:
@@ -32,6 +38,12 @@ curl --fail-with-body http://127.0.0.1:8000/products \
   -H 'Content-Type: application/json' \
   --data-binary @examples/assignment-sample.json
 ```
+
+Реальные ответы через Codex CLI (`gpt-6.1-sol`, 03.11.2026):
+[DM 02](examples/assignment-sample-result.json),
+[WIKA](examples/wika-9022597-result.json).
+[Проверка выдуманной гарантии](examples/factuality-probe.json) содержит изменённый
+черновик и реальное замечание модели.
 
 ## Вход и ответ
 
@@ -67,25 +79,6 @@ curl --fail-with-body http://127.0.0.1:8000/products \
 - [presentation/http.py](presentation/http.py) — HTTP; [main.py](main.py) — сборка приложения.
 
 Домен и приложение не зависят от FastAPI и OpenAI SDK — зависимости направлены внутрь.
-
-## Примеры и ограничения
-
-- [Пример задания](examples/assignment-sample.json) скопирован из PDF.
-- [WIKA 9022597](examples/wika-9022597.json) выбран самостоятельно:
-  [каталог, стр. 40](https://www.wika.com/media/Others/IT-IT/std_catalogue_2025_2026_en_co.pdf#page=40),
-  [PM 02.12](https://www.wika.com/media/Data-sheets/Pressure/Pressure-gauges/ds_pm0212_en_co.pdf#page=3)
-  (применение — стр. 1, точность и температура — стр. 3). Проверено 03.11.2026.
-  Это не второй товар работодателя; неизвестные параметры оставлены пустыми.
-
-Реальные ответы ещё не получены — нужен ключ API.
-Для сдачи также нужен второй товар работодателя.
-Тесты используют подмены и не измеряют качество модели. Проверка той же моделью
-может ошибаться и не подтверждает достоверность источника.
-
-Успешная генерация требует двух последовательных запросов. Тайм-аут каждого —
-30 секунд, допускается одна повторная попытка SDK. Прямые зависимости закреплены,
-полной фиксации транзитивных зависимостей нет. Следующие шаги: реальные примеры,
-оценка проверки фактов человеком и полная фиксация зависимостей.
 
 ## Проверки
 
