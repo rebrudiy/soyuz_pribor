@@ -122,7 +122,10 @@ def test_incomplete_data_still_reaches_the_model(data: dict[str, object]) -> Non
             3,
         ),
         (
-            {"seo_description": "x" * 1201, "search_queries": ["query"] * 6},
+            {
+                "seo_description": "x" * 1201,
+                "search_queries": [f"query {index}" for index in range(6)],
+            },
             2,
         ),
         (
@@ -130,7 +133,10 @@ def test_incomplete_data_still_reaches_the_model(data: dict[str, object]) -> Non
             0,
         ),
         (
-            {"seo_description": "x" * 1200, "search_queries": ["query"] * 5},
+            {
+                "seo_description": "x" * 1200,
+                "search_queries": [f"query {index}" for index in range(5)],
+            },
             0,
         ),
     ],
@@ -200,6 +206,35 @@ def test_blank_content_is_reported_without_rejecting_the_draft(
     result = asyncio.run(generate_product({}, client=FakeClient(draft)))
 
     assert result["warnings"] == [expected_warning]
+    assert result["draft"] == draft | {"key_characteristics": []}
+
+
+@pytest.mark.parametrize(
+    "queries",
+    [
+        ["манометр DM02"] * 3,
+        ["манометр DM02", " Манометр dm02 \t", "манометр давления"],
+    ],
+)
+def test_repeated_queries_are_reported_without_rewriting_the_draft(
+    queries: list[str],
+) -> None:
+    draft = _draft() | {"search_queries": queries}
+
+    result = asyncio.run(generate_product({}, client=FakeClient(draft)))
+
+    assert result["warnings"] == ["Search queries contain repeated entries."]
+    assert result["product"] == {}
+    assert result["draft"] == draft | {"key_characteristics": []}
+
+
+@pytest.mark.parametrize("count", [3, 4, 5])
+def test_distinct_queries_do_not_add_a_warning(count: int) -> None:
+    draft = _draft() | {"search_queries": [f"запрос {index}" for index in range(count)]}
+
+    result = asyncio.run(generate_product({}, client=FakeClient(draft)))
+
+    assert result["warnings"] == []
     assert result["draft"] == draft | {"key_characteristics": []}
 
 

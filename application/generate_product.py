@@ -64,6 +64,9 @@ def _quality_warnings(draft: dict[str, object]) -> list[str]:
     ]
     if any(not query.strip() for query in draft["search_queries"]):
         warnings.append("Search queries contain blank entries.")
+    normalized_queries = [query.strip().casefold() for query in draft["search_queries"]]
+    if len(set(normalized_queries)) != len(normalized_queries):
+        warnings.append("Search queries contain repeated entries.")
     if len(draft["seo_title"]) > 70:
         warnings.append("SEO title exceeds 70 characters.")
     if not 800 <= len(draft["seo_description"]) <= 1200:
