@@ -106,6 +106,7 @@ class OpenAIJsonClient:
             APIError,
             json.JSONDecodeError,
             UnicodeDecodeError,
+            UnicodeEncodeError,
             RecursionError,
         ) as exc:
             status = exc.status_code if isinstance(exc, APIStatusError) else None

@@ -37,9 +37,11 @@ def _response(text: str = '{"seo_title":"Черновик"}') -> dict[str, objec
     }
 
 
-def _sdk(handler: Callable[[httpx2.Request], httpx2.Response]) -> AsyncOpenAI:
+def _sdk(
+    handler: Callable[[httpx2.Request], httpx2.Response], *, api_key: str = "test-key"
+) -> AsyncOpenAI:
     return AsyncOpenAI(
-        api_key="test-key",
+        api_key=api_key,
         max_retries=0,
         http_client=httpx2.AsyncClient(transport=httpx2.MockTransport(handler)),
     )
@@ -115,6 +117,32 @@ def test_wraps_api_errors_without_exposing_provider_text(
     assert records[0].exc_info is None
     assert "test-key" not in caplog.text
     assert "Provider error" not in caplog.text
+
+
+def test_wraps_non_ascii_api_key_without_exposing_it(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    synthetic_key = "synthetic-secret-canary-\u201d"
+    request_count = 0
+
+    def handler(request: httpx2.Request) -> httpx2.Response:
+        nonlocal request_count
+        request_count += 1
+        return httpx2.Response(200, json=_response(), request=request)
+
+    async def run() -> None:
+        async with _sdk(handler, api_key=synthetic_key) as sdk:
+            await OpenAIJsonClient(sdk, model="test-model").generate(
+                {}, instructions=INSTRUCTIONS, schema=SCHEMA
+            )
+
+    with pytest.raises(LLMError, match=r"^The LLM request failed\.$") as caught:
+        asyncio.run(run())
+
+    assert request_count == 0
+    assert "synthetic-secret-canary" not in str(caught.value)
+    assert "synthetic-secret-canary" not in caplog.text
+    assert "UnicodeEncodeError" in caplog.text
 
 
 def test_wraps_sdk_timeout() -> None:
