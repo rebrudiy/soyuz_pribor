@@ -80,6 +80,11 @@ are pending API access and review; no fabricated outputs are supplied.
 `specs` accepts an object or null. Additional input fields are preserved and
 sent to the model as source data.
 
+Send precision-sensitive technical values as quoted strings, for example
+`"0.1234567890123456789 МПа"`. If a JSON number would be rounded or overflow or
+underflow during parsing, the service returns `422` before any model request.
+Ordinary decimals, zero, and false are accepted without coercing them to strings.
+
 | Response field | Meaning |
 | --- | --- |
 | `product` | Original input JSON. |
@@ -104,7 +109,7 @@ rewriting. Neither status proves that the source or generated text is true.
 | --- | --- |
 | `200` | Draft and factuality review returned, including incomplete or flagged drafts. |
 | `415` | Unsupported content type. Use `application/json`. |
-| `422` | Invalid JSON, a non-object body, or wrong product field types. |
+| `422` | Invalid JSON, a non-object body, wrong product field types, or unsupported numeric precision. |
 | `502` | Generation or review failed, was refused, or returned unusable output. |
 | `503` | API key or model configuration is missing. |
 

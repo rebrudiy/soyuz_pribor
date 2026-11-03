@@ -1,4 +1,5 @@
 import json
+from decimal import Decimal, InvalidOperation
 from typing import Never
 
 from fastapi import APIRouter, HTTPException, Request
@@ -21,6 +22,19 @@ def _unique_fields(pairs: list[tuple[str, object]]) -> dict[str, object]:
 
 def _reject_constant(value: str) -> Never:
     raise ValueError(f"Unsupported JSON number: {value}.")
+
+
+def _parse_float(literal: str) -> float:
+    """Reject numeric values changed by the normal JSON float round-trip."""
+    message = "Quote this number to preserve its exact value."
+    try:
+        number = float(literal)
+        preserved = Decimal(literal) == Decimal(str(number))
+    except InvalidOperation:
+        raise ValueError(message) from None
+    if not preserved:
+        raise ValueError(message)
+    return number
 
 
 @router.post(
@@ -62,7 +76,10 @@ async def _read_json_object(request: Request) -> dict[str, object]:
 
     body = await request.body()
     product = json.loads(
-        body, object_pairs_hook=_unique_fields, parse_constant=_reject_constant
+        body,
+        object_pairs_hook=_unique_fields,
+        parse_constant=_reject_constant,
+        parse_float=_parse_float,
     )
     if not isinstance(product, dict):
         raise ValueError("JSON must be an object.")

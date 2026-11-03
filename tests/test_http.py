@@ -1,3 +1,6 @@
+import json
+from decimal import Decimal
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -5,7 +8,11 @@ from main import create_app
 
 
 class StubLLM:
+    def __init__(self) -> None:
+        self.inputs: list[dict[str, object]] = []
+
     async def generate(self, data, *, instructions, schema):
+        self.inputs.append(dict(data))
         if "issues" in schema["properties"]:
             return {"issues": []}
         return {
@@ -192,3 +199,62 @@ def test_requires_json_content_type(content_type: str | None) -> None:
 
     assert response.status_code == 415
     assert response.json()["detail"]
+
+
+@pytest.mark.parametrize(
+    "literal",
+    [
+        "0.1234567890123456789",
+        "1e-400",
+        "-1e-400",
+        "1e400",
+        "1e-9999999999999999999999",
+    ],
+)
+def test_rejects_number_rounding_before_a_model_call(literal: str) -> None:
+    llm = StubLLM()
+    body = '{"specs":{"value":' + literal + "}}"
+
+    with TestClient(create_app(llm=llm)) as client:
+        response = client.post(
+            "/products", content=body, headers={"Content-Type": "application/json"}
+        )
+
+    assert response.status_code == 422
+    assert "quote" in response.json()["detail"].lower()
+    assert llm.inputs == []
+
+
+def test_rejects_rounding_in_nested_additional_source_data() -> None:
+    llm = StubLLM()
+    body = '{"extra":{"values":[0.1234567890123456789]}}'
+
+    with TestClient(create_app(llm=llm)) as client:
+        response = client.post(
+            "/products", content=body, headers={"Content-Type": "application/json"}
+        )
+
+    assert response.status_code == 422
+    assert "quote" in response.json()["detail"].lower()
+    assert llm.inputs == []
+
+
+def test_preserves_supported_numbers_and_quoted_exact_values() -> None:
+    llm = StubLLM()
+    body = (
+        '{"specs":{"fraction":0.1,"trailing":1.2300,"exponent":1.25e2,'
+        '"zero":0,"disabled":false,"nested":{"value":0.125},'
+        '"exact":"0.1234567890123456789 МПа"}}'
+    )
+
+    with TestClient(create_app(llm=llm)) as client:
+        response = client.post(
+            "/products", content=body, headers={"Content-Type": "application/json"}
+        )
+
+    assert response.status_code == 200
+    result = json.loads(response.text, parse_float=Decimal)
+    assert result["product"] == json.loads(body, parse_float=Decimal)
+    assert result["product"]["specs"]["disabled"] is False
+    assert result["product"]["specs"]["zero"] == 0
+    assert len(llm.inputs) == 2
