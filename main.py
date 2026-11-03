@@ -1,3 +1,4 @@
+import logging
 from argparse import ArgumentParser
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
@@ -43,6 +44,11 @@ app = create_app()
 
 
 if __name__ == "__main__":
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+        datefmt="%H:%M:%S",
+    )
     parser = ArgumentParser()
     parser.add_argument(
         "--codex", action="store_true", help="Use the local Codex ChatGPT login."

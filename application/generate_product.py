@@ -1,10 +1,14 @@
+import logging
 from collections.abc import Mapping
+from time import perf_counter
 
 from application.check_factuality import check_factuality
 from application.llm import JsonLLMClient, LLMError, LLMNotConfigured
 from application.product_prompt import DRAFT_SCHEMA, PRODUCT_PROMPT
 from application.validate_product import validate_product
 from domain.product import Product
+
+logger = logging.getLogger(__name__)
 
 
 async def generate_product(
@@ -14,11 +18,20 @@ async def generate_product(
     product = validate_product(data)
     if client is None:
         raise LLMNotConfigured("The LLM client is not configured.")
+    started = perf_counter()
+    logger.info("Generating draft.")
     draft = await client.generate(
         data, instructions=PRODUCT_PROMPT, schema=DRAFT_SCHEMA
     )
     _check_draft(draft)
+    logger.info("Draft generated in %.1fs. Checking facts.", perf_counter() - started)
+    started = perf_counter()
     factuality = await check_factuality(data, draft, client=client)
+    logger.info(
+        "Facts checked in %.1fs; issues: %d.",
+        perf_counter() - started,
+        len(factuality["issues"]),
+    )
     return {
         "product": dict(data),
         "missing_fields": product.missing_fields(),

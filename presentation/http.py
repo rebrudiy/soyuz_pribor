@@ -1,5 +1,7 @@
 import json
+import logging
 from decimal import Decimal, InvalidOperation
+from time import perf_counter
 from typing import Never
 
 from fastapi import APIRouter, HTTPException, Request
@@ -10,6 +12,7 @@ from application.llm import LLMError, LLMNotConfigured
 from domain.product import InvalidProduct
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 def _unique_fields(pairs: list[tuple[str, object]]) -> dict[str, object]:
@@ -48,19 +51,28 @@ def _parse_float(literal: str) -> float:
     },
 )
 async def receive_product(request: Request) -> JSONResponse:
+    started = perf_counter()
+    logger.info("POST /products received.")
     try:
         product = await _read_json_object(request)
         result = await generate_product(product, client=request.app.state.llm)
+        logger.info("Response ready in %.1fs (HTTP 200).", perf_counter() - started)
         return JSONResponse(content=result)
+    except HTTPException as exc:
+        logger.warning("Product request rejected (HTTP %d).", exc.status_code)
+        raise
     except LLMNotConfigured:
+        logger.warning("LLM is not configured (HTTP 503).")
         raise HTTPException(
             status_code=503, detail="Set OPENAI_API_KEY and OPENAI_MODEL in .env."
         ) from None
     except LLMError:
+        logger.warning("Product request failed (HTTP 502).")
         raise HTTPException(
             status_code=502, detail="Product generation failed."
         ) from None
     except InvalidProduct as exc:
+        logger.warning("Product fields rejected (HTTP 422).")
         raise HTTPException(status_code=422, detail=str(exc)) from None
 
 

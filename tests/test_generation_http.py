@@ -163,3 +163,46 @@ def test_app_does_not_close_a_borrowed_client() -> None:
     with TestClient(create_app(llm=llm)) as client:
         assert client.post("/products", json={}).status_code == 200
     assert not llm.closed
+
+
+def test_progress_is_logged_before_each_model_request(caplog):
+    caplog.set_level("INFO")
+
+    class ObservedLLM(StubLLM):
+        async def generate(self, data, *, instructions, schema):
+            messages = [record.getMessage() for record in caplog.records]
+            if "issues" in schema["properties"]:
+                assert any("Checking facts." in message for message in messages)
+            else:
+                assert "POST /products received." in messages
+                assert "Generating draft." in messages
+            return await super().generate(
+                data, instructions=instructions, schema=schema
+            )
+
+    with TestClient(create_app(llm=ObservedLLM())) as client:
+        response = client.post("/products", json={"name": "private-product-canary"})
+    assert response.status_code == 200
+    messages = [record.getMessage() for record in caplog.records]
+    assert any("Response ready in" in message for message in messages)
+    assert "private-product-canary" not in caplog.text
+
+
+@pytest.mark.parametrize("stage", ["generation", "review"])
+def test_failed_model_stage_is_logged_without_private_details(stage, caplog):
+    caplog.set_level("INFO")
+
+    class FailedLLM(StubLLM):
+        async def generate(self, data, *, instructions, schema):
+            if ("issues" in schema["properties"]) == (stage == "review"):
+                raise LLMError("private-provider-log-canary")
+            return await super().generate(
+                data, instructions=instructions, schema=schema
+            )
+
+    with TestClient(create_app(llm=FailedLLM())) as client:
+        response = client.post("/products", json={})
+    assert response.status_code == 502
+    assert "Product request failed (HTTP 502)." in caplog.messages
+    assert "private-provider-log-canary" not in caplog.text
+    assert not any("Response ready in" in message for message in caplog.messages)

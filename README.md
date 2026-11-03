@@ -33,6 +33,8 @@ codex login
 
 API: http://127.0.0.1:8000/docs. Пример запроса:
 
+В терминале сервера видны этапы и время запроса. Curl получает JSON после генерации и проверки фактов.
+
 ```bash
 curl --fail-with-body http://127.0.0.1:8000/products \
   -H 'Content-Type: application/json' \
