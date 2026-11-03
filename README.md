@@ -49,6 +49,30 @@ curl --fail-with-body http://127.0.0.1:8000/products \
 The service accepts `{}` too. This example is an input demonstration, not a
 recorded live model result.
 
+## Example inputs and sources
+
+- [Assignment sample](examples/assignment-sample.json): copied from the example
+  JSON in the take-home PDF, including its abbreviated description. This is
+  assignment data, not an independently verified manufacturer specification.
+- [WIKA 213.53 family](examples/wika-21353-family.json): selected for this demo
+  from the [manufacturer's product page](https://www.wika.com/en-en/213_53.WIKA)
+  and [datasheet PM 02.12](https://www.wika.com/media/Data-sheets/Pressure/Pressure-gauges/ds_pm0212_en_co.pdf),
+  checked on 2026-11-03. This is family-level data, not an employer-provided
+  second product or a selected order configuration. The listed sizes are options;
+  no range, accuracy, connection variant, or filling fluid has been selected.
+
+Send either file to the running service:
+
+```bash
+curl --fail-with-body http://127.0.0.1:8000/products \
+  -H 'Content-Type: application/json' \
+  --data-binary @examples/assignment-sample.json
+```
+
+Replace the filename to try the WIKA input. Both inputs are included so the
+prototype can be tried without inventing product data. Actual generated outputs
+are pending API access and review; no fabricated outputs are supplied.
+
 ## API behavior
 
 `POST /products` accepts a JSON object. Known fields are optional: `name`,
