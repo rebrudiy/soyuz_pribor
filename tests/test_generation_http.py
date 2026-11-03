@@ -22,6 +22,8 @@ class StubLLM:
         schema: Mapping[str, object],
     ) -> dict[str, object]:
         self.inputs.append(dict(data))
+        if "issues" in schema["properties"]:
+            return {"issues": []}
         return {
             "seo_title": "Черновик карточки",
             "seo_description": "Описание прибора. " * 55,
@@ -37,8 +39,14 @@ def test_http_calls_generation_for_incomplete_input() -> None:
         response = client.post("/products", json={})
 
     assert response.status_code == 200
-    assert llm.inputs == [{}]
+    assert len(llm.inputs) == 2
+    assert llm.inputs[0] == {}
+    assert llm.inputs[1]["source"] == {}
     assert response.json()["draft"]["seo_title"] == "Черновик карточки"
+    assert response.json()["factuality"] == {
+        "status": "no_unsupported_claims_found",
+        "issues": [],
+    }
     assert response.json()["missing_fields"] == [
         "name",
         "manufacturer",
@@ -57,6 +65,48 @@ def test_http_translates_model_failure_without_leaking_details() -> None:
 
     assert response.status_code == 502
     assert "private provider details" not in response.text
+
+
+def test_http_reports_flagged_claims_without_rejecting_missing_input() -> None:
+    issue = {
+        "field": "commercial_block",
+        "claim": "Для задач измерения.",
+        "reason": "No intended use was supplied.",
+    }
+
+    class FlaggingLLM(StubLLM):
+        async def generate(self, data, *, instructions, schema):
+            if "issues" in schema["properties"]:
+                return {"issues": [issue]}
+            return await super().generate(
+                data, instructions=instructions, schema=schema
+            )
+
+    with TestClient(create_app(llm=FlaggingLLM())) as client:
+        response = client.post("/products", json={})
+
+    assert response.status_code == 200
+    assert response.json()["factuality"] == {
+        "status": "needs_review",
+        "issues": [issue],
+    }
+
+
+def test_http_reports_review_failure_without_returning_an_unchecked_draft() -> None:
+    class FailedReview(StubLLM):
+        async def generate(self, data, *, instructions, schema):
+            if "issues" in schema["properties"]:
+                raise LLMError("private reviewer details")
+            return await super().generate(
+                data, instructions=instructions, schema=schema
+            )
+
+    with TestClient(create_app(llm=FailedReview())) as client:
+        response = client.post("/products", json={})
+
+    assert response.status_code == 502
+    assert "private reviewer details" not in response.text
+    assert "draft" not in response.json()
 
 
 def test_missing_configuration_is_reported_without_a_model_call(monkeypatch) -> None:

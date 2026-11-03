@@ -6,6 +6,8 @@ from main import create_app
 
 class StubLLM:
     async def generate(self, data, *, instructions, schema):
+        if "issues" in schema["properties"]:
+            return {"issues": []}
         return {
             "seo_title": "Черновик",
             "seo_description": "Описание прибора. " * 55,

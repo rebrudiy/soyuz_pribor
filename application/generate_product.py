@@ -1,5 +1,6 @@
 from collections.abc import Mapping
 
+from application.check_factuality import check_factuality
 from application.llm import JsonLLMClient, LLMError, LLMNotConfigured
 from application.product_prompt import DRAFT_SCHEMA, PRODUCT_PROMPT
 from application.validate_product import validate_product
@@ -17,11 +18,13 @@ async def generate_product(
         data, instructions=PRODUCT_PROMPT, schema=DRAFT_SCHEMA
     )
     _check_draft(draft)
+    factuality = await check_factuality(data, draft, client=client)
     return {
         "product": dict(data),
         "missing_fields": product.missing_fields(),
         "draft": {**draft, "key_characteristics": _characteristics(product)},
         "warnings": _quality_warnings(draft),
+        "factuality": factuality,
     }
 
 

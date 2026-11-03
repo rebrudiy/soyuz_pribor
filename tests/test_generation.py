@@ -20,8 +20,14 @@ def _draft() -> dict[str, object]:
 
 
 class FakeClient:
-    def __init__(self, result: dict[str, object] | LLMError) -> None:
+    def __init__(
+        self,
+        result: dict[str, object] | LLMError,
+        *,
+        review: dict[str, object] | LLMError | None = None,
+    ) -> None:
         self.result = result
+        self.review = {"issues": []} if review is None else review
         self.calls: list[tuple[dict[str, object], str, dict[str, object]]] = []
 
     async def generate(
@@ -32,9 +38,10 @@ class FakeClient:
         schema: Mapping[str, object],
     ) -> dict[str, object]:
         self.calls.append((deepcopy(dict(data)), instructions, deepcopy(dict(schema))))
-        if isinstance(self.result, LLMError):
-            raise self.result
-        return deepcopy(self.result)
+        result = self.review if "issues" in schema["properties"] else self.result
+        if isinstance(result, LLMError):
+            raise result
+        return deepcopy(result)
 
 
 def test_generation_preserves_input_and_builds_characteristics_from_supplied_specs() -> (
@@ -71,7 +78,7 @@ def test_generation_preserves_input_and_builds_characteristics_from_supplied_spe
         ]
     }
     assert result["warnings"] == []
-    assert len(client.calls) == 1
+    assert len(client.calls) == 2
     sent_data, instructions, schema = client.calls[0]
     assert sent_data == original
     assert instructions.strip()
@@ -99,7 +106,7 @@ def test_incomplete_data_still_reaches_the_model(data: dict[str, object]) -> Non
     }
     assert result["draft"]["key_characteristics"] == []
     assert result["draft"]["clarifications"] == _draft()["clarifications"]
-    assert len(client.calls) == 1
+    assert len(client.calls) == 2
     assert client.calls[0][0] == data
 
 
@@ -142,7 +149,35 @@ def test_quality_limits_add_warnings_without_rewriting_or_rejecting_the_draft(
     assert all(
         isinstance(warning, str) and warning.strip() for warning in result["warnings"]
     )
-    assert len(client.calls) == 1
+    assert len(client.calls) == 2
+
+
+def test_factuality_review_compares_original_input_with_generated_draft() -> None:
+    data = {"name": "DM02", "specs": {"range": "0-1,6 МПа"}}
+    draft = _draft() | {"commercial_block": "Гарантия 24 месяца."}
+    issue = {
+        "field": "commercial_block",
+        "claim": "Гарантия 24 месяца.",
+        "reason": "The source does not specify a warranty.",
+    }
+    client = FakeClient(draft, review={"issues": [issue]})
+
+    result = asyncio.run(generate_product(data, client=client))
+
+    assert client.calls[1][0] == {"source": data, "draft": draft}
+    assert result["factuality"] == {"status": "needs_review", "issues": [issue]}
+    assert result["draft"]["commercial_block"] == draft["commercial_block"]
+
+
+def test_failed_review_does_not_return_an_unchecked_success() -> None:
+    error = LLMError("Reviewer unavailable")
+    client = FakeClient(_draft(), review=error)
+
+    with pytest.raises(LLMError) as caught:
+        asyncio.run(generate_product({}, client=client))
+
+    assert caught.value is error
+    assert len(client.calls) == 2
 
 
 @pytest.mark.parametrize(
