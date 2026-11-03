@@ -1,3 +1,4 @@
+from argparse import ArgumentParser
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -42,4 +43,12 @@ app = create_app()
 
 
 if __name__ == "__main__":
+    parser = ArgumentParser()
+    parser.add_argument(
+        "--codex", action="store_true", help="Use the local Codex ChatGPT login."
+    )
+    if parser.parse_args().codex:
+        from infrastructure.codex_client import CodexJsonClient
+
+        app = create_app(CodexJsonClient())
     uvicorn.run(app, host="127.0.0.1", port=8000)
